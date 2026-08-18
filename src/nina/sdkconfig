@@ -397,12 +397,11 @@ CONFIG_PARTITION_TABLE_MD5=y
 #
 # Credentials for connecting to another access-point
 #
-CONFIG_EXAMPLE_SSID="drone_wifi"
-CONFIG_EXAMPLE_PASSWORD="wifi-wifi"
+CONFIG_EXAMPLE_SSID="dlink-3860"
+CONFIG_EXAMPLE_PASSWORD="qevlq46613"
 # end of Credentials for connecting to another access-point
 
-CONFIG_ENABLE_MDNS=y
-CONFIG_MDNS_HOSTNAME="aideck"
+# CONFIG_ENABLE_MDNS is not set
 # CONFIG_ENABLE_UDP_TX is not set
 # end of Streamer configuration
 

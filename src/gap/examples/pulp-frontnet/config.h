@@ -3,7 +3,7 @@
  * Elia Cereda <elia.cereda@idsia.ch>
  *
  * Copyright (C) 2022-2025 IDSIA, USI-SUPSI
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -15,9 +15,9 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- * 
+ *
  * This software is based on the following publication:
- *    E. Cereda, A. Giusti, D. Palossi. "NanoCockpit: Performance-optimized 
+ *    E. Cereda, A. Giusti, D. Palossi. "NanoCockpit: Performance-optimized
  *    Application Framework for AI-based Autonomous Nanorobotics"
  * We kindly ask for a citation if you use in academic work.
  */
@@ -50,7 +50,7 @@
 #define NETWORK_VERBOSE (0)
 
 // Run network inference on a pre-loaded image and verify checksum
-// #define NETWORK_TEST_INPUT
+#define NETWORK_TEST_INPUT
 
 // Profile network inference
 // #define NETWORK_PROFILE
@@ -59,15 +59,15 @@
 // #define STREAMER_DISABLE
 
 /**************************** SOC SETTINGS ****************************/
-#define SOC_VOLTAGE                 (1200)
-#define SOC_FREQ_FC                 (246000000)
-#define SOC_FREQ_CL                 (175000000)
+#define SOC_VOLTAGE (1200)
+#define SOC_FREQ_FC (246000000)
+#define SOC_FREQ_CL (175000000)
 
 // Target board, used to load the correct pad configurations
 //  - 0: AI-deck [default]
 //  - 1: GAPuino/lab
 // TODO: GAPuino/GAPlab are untested in this implementation
-#define BOARD                       (0)
+#define BOARD (0)
 
 /*************************** HIMAX SETTINGS ****************************
  *                                                                     *
@@ -119,7 +119,7 @@
  **********************************************************************/
 
 // Frame resolution selection
-#define HIMAX_FORMAT               (2)
+#define HIMAX_FORMAT (2)
 
 // Clock mode selection
 //  - 0: MCLK mode [default]
@@ -150,13 +150,13 @@
 #define HIMAX_INTEGRATION_MS (10.0f)
 
 // Analog gain (1x to 16x), refer to datasheet for details
-#define HIMAX_AGAIN          (0x10)
+#define HIMAX_AGAIN (0x10)
 
 // Digital gain, TODO: seems to have no effect
-#define HIMAX_DGAIN          (0x0100)     
+#define HIMAX_DGAIN (0x0100)
 
 // Himax desired frame rate [Hz]
-#define HIMAX_FRAME_RATE    (30.0f)
+#define HIMAX_FRAME_RATE (30.0f)
 
 // Print HIMAX configuration after acquiring the first frame (requires VERBOSE)
 // #define HIMAX_CONFIG_DUMP_ONCE
@@ -171,26 +171,26 @@
 /************************** CAMERA SETTINGS ***************************/
 
 // Number of camera buffers to allocate (currently supported: 1, 2)
-#define CAMERA_BUFFERS              (2)
+#define CAMERA_BUFFERS (2)
 
 // Crop configuration
 #if HIMAX_FORMAT == 0 || HIMAX_FORMAT == 1
-#define CAMERA_CROP_TOP    (2)
-#define CAMERA_CROP_LEFT   (2)
-#define CAMERA_CROP_RIGHT  (2)
+#define CAMERA_CROP_TOP (2)
+#define CAMERA_CROP_LEFT (2)
+#define CAMERA_CROP_RIGHT (2)
 #define CAMERA_CROP_BOTTOM (2)
 #else
-#define CAMERA_CROP_TOP    (1)
-#define CAMERA_CROP_LEFT   (1)
-#define CAMERA_CROP_RIGHT  (1)
+#define CAMERA_CROP_TOP (1)
+#define CAMERA_CROP_LEFT (1)
+#define CAMERA_CROP_RIGHT (1)
 #define CAMERA_CROP_BOTTOM (1)
 #endif
 
 /**************************** CPX SETTINGS ****************************/
 
 // Enable bidirectional CPX SPI communication (GAP<=>ESP32).
-// Keep disabled (i.e., GAP8->ESP32 only) unless needed, because it 
-// allows much higher SPI bandwidth compared to bidirectional 
+// Keep disabled (i.e., GAP8->ESP32 only) unless needed, because it
+// allows much higher SPI bandwidth compared to bidirectional
 // communication. This is further made worse by an AI-deck PCB bug.
 // (see also src/nina/main/cpx_spi.c)
 // #define CPX_SPI_BIDIRECTIONAL
@@ -212,74 +212,74 @@
 /*************************** GPIO SETTINGS ****************************/
 // Available GPIOs on AI-Deck:
 //                       PMSIS function             Schematic name      Notes
-#define GPIO_LED         PI_GPIO_A2_PAD_14_A2    // GAP8_LED            accessible with clip on LED, free
-#define GPIO_GAP8_RTT    PI_GPIO_A3_PAD_15_B1    // GAP8_GPIO_NINA_IO   not accessible [ERRATA: 1V8 pin, use only as GAP8 out -> NINA in, DOUBLE ERRATA: according to padframe.xlsx, it's NINA_GPIO_GAP8_IO that is supposed to be 1V8 instead]
-#define GPIO_NINA_RTT    PI_GPIO_A18_PAD_32_A13  // NINA_GPIO_GAP8_IO   not accessible
-#define GPIO_I2C_SDA     PI_GPIO_A15_PAD_29_B34  // SPARE_I2C_SDA       accessible from header, pulled-up on cf side (also TIMER3_CH3)
-#define GPIO_I2C_SCL     PI_GPIO_A16_PAD_30_D1   // SPARE_I2C_SCL       accessible from header, pulled-up on cf side
-#define GPIO_TIMER0_CH0  PI_GPIO_A17_PAD_31_B11  // GAP8_TIMER0CH0_1V8  accessible with clip on U9 2, camera MCLK
-#define GPIO_UART_RX     PI_GPIO_A24_PAD_38_B6   // GAP8_UART_RX_3V     accessible from header, driven by cf (usable only as input)
-#define GPIO_UART_TX     PI_GPIO_A25_PAD_39_A7   // GAP8_UART_TX_1V8    accessible from header, free
+#define GPIO_LED PI_GPIO_A2_PAD_14_A2          // GAP8_LED            accessible with clip on LED, free
+#define GPIO_GAP8_RTT PI_GPIO_A3_PAD_15_B1     // GAP8_GPIO_NINA_IO   not accessible [ERRATA: 1V8 pin, use only as GAP8 out -> NINA in, DOUBLE ERRATA: according to padframe.xlsx, it's NINA_GPIO_GAP8_IO that is supposed to be 1V8 instead]
+#define GPIO_NINA_RTT PI_GPIO_A18_PAD_32_A13   // NINA_GPIO_GAP8_IO   not accessible
+#define GPIO_I2C_SDA PI_GPIO_A15_PAD_29_B34    // SPARE_I2C_SDA       accessible from header, pulled-up on cf side (also TIMER3_CH3)
+#define GPIO_I2C_SCL PI_GPIO_A16_PAD_30_D1     // SPARE_I2C_SCL       accessible from header, pulled-up on cf side
+#define GPIO_TIMER0_CH0 PI_GPIO_A17_PAD_31_B11 // GAP8_TIMER0CH0_1V8  accessible with clip on U9 2, camera MCLK
+#define GPIO_UART_RX PI_GPIO_A24_PAD_38_B6     // GAP8_UART_RX_3V     accessible from header, driven by cf (usable only as input)
+#define GPIO_UART_TX PI_GPIO_A25_PAD_39_A7     // GAP8_UART_TX_1V8    accessible from header, free
 
 /*************************** HIMAX SETTINGS ***************************/
-// Certain combinations of boards and clock modes only support a specific 
+// Certain combinations of boards and clock modes only support a specific
 // clock frequency and divider configuration.
-// The following defines will cause a compilation error if you try to 
+// The following defines will cause a compilation error if you try to
 // change a parameter that cannot be changed.
-#if BOARD == 0 // AI-deck
-    #if HIMAX_ANA == 0 // MCLK mode
-        // HIMAX_FQCY, HIMAX_SYS_DIV, and HIMAX_REG_DIV are fully configurable
-        
-        #if SOC_FREQ_FC % HIMAX_FQCY != 0
-            #error Desired HIMAX_FQCY cannot be generated from the current SOC_FREQ_FC, \
-                   you should change SOC_FREQ_FC to be a multiple of HIMAX_FQCY
-        #endif
-	#elif HIMAX_ANA == 1 // OSC mode
-        // FIXME: this might be incorrect, from the datasheet it looks like 48MHz /8
-        #define HIMAX_FQCY 12000000     // 12MHz internal osc
- 		#define HIMAX_SYS_DIV 1         // div /2
- 		#define HIMAX_REG_DIV 1         // div /2
-	#endif
-#elif BOARD == 1 // GAPuino/lab
-    #if HIMAX_ANA == 0 // MCLK mode
-        #define HIMAX_FQCY 10000000     // 10MHz external osc
-	#elif HIMAX_ANA == 1 // OSC mode
-        #define HIMAX_FQCY 10000000     // 10MHz external osc
- 		#define HIMAX_SYS_DIV 1         // div /2
-  		#define HIMAX_REG_DIV 1         // div /2
-    #endif
+#if BOARD == 0     // AI-deck
+#if HIMAX_ANA == 0 // MCLK mode
+// HIMAX_FQCY, HIMAX_SYS_DIV, and HIMAX_REG_DIV are fully configurable
 
-    // Remap RTT pins to accessible GPIOs
-    #undef GPIO_NINA_RTT
-    #undef GPIO_GAP8_RTT
-    #define GPIO_NINA_RTT PI_GPIO_A17_PAD_31_B11
-    #define GPIO_GAP8_RTT PI_GPIO_A4_PAD_16_A44
+#if SOC_FREQ_FC % HIMAX_FQCY != 0
+#error Desired HIMAX_FQCY cannot be generated from the current SOC_FREQ_FC, \
+                   you should change SOC_FREQ_FC to be a multiple of HIMAX_FQCY
+#endif
+#elif HIMAX_ANA == 1        // OSC mode
+// FIXME: this might be incorrect, from the datasheet it looks like 48MHz /8
+#define HIMAX_FQCY 12000000 // 12MHz internal osc
+#define HIMAX_SYS_DIV 1     // div /2
+#define HIMAX_REG_DIV 1     // div /2
+#endif
+#elif BOARD == 1            // GAPuino/lab
+#if HIMAX_ANA == 0          // MCLK mode
+#define HIMAX_FQCY 10000000 // 10MHz external osc
+#elif HIMAX_ANA == 1        // OSC mode
+#define HIMAX_FQCY 10000000 // 10MHz external osc
+#define HIMAX_SYS_DIV 1     // div /2
+#define HIMAX_REG_DIV 1     // div /2
+#endif
+
+// Remap RTT pins to accessible GPIOs
+#undef GPIO_NINA_RTT
+#undef GPIO_GAP8_RTT
+#define GPIO_NINA_RTT PI_GPIO_A17_PAD_31_B11
+#define GPIO_GAP8_RTT PI_GPIO_A4_PAD_16_A44
 #endif
 
 #if HIMAX_FORMAT == 0
-    #define HIMAX_WIDTH   (324)
-    #define HIMAX_HEIGHT  (324)
+#define HIMAX_WIDTH (324)
+#define HIMAX_HEIGHT (324)
 #elif HIMAX_FORMAT == 1
-    #define HIMAX_WIDTH   (324)
-    #define HIMAX_HEIGHT  (244)
+#define HIMAX_WIDTH (324)
+#define HIMAX_HEIGHT (244)
 #elif HIMAX_FORMAT == 2
-    #define HIMAX_WIDTH   (162)
-    #define HIMAX_HEIGHT  (162)
+#define HIMAX_WIDTH (162)
+#define HIMAX_HEIGHT (162)
 #elif HIMAX_FORMAT == 3
-    #define HIMAX_WIDTH   (162)
-    #define HIMAX_HEIGHT  (122)
+#define HIMAX_WIDTH (162)
+#define HIMAX_HEIGHT (122)
 #endif
 
-#define HIMAX_BPP  (1)
+#define HIMAX_BPP (1)
 
 /************************** CAMERA SETTINGS ***************************/
 
-#define CAMERA_CAPTURE_WIDTH   (HIMAX_WIDTH)
-#define CAMERA_CAPTURE_HEIGHT  (HIMAX_HEIGHT - CAMERA_CROP_BOTTOM)
-#define CAMERA_CAPTURE_BPP     (HIMAX_BPP)
+#define CAMERA_CAPTURE_WIDTH (HIMAX_WIDTH)
+#define CAMERA_CAPTURE_HEIGHT (HIMAX_HEIGHT - CAMERA_CROP_BOTTOM)
+#define CAMERA_CAPTURE_BPP (HIMAX_BPP)
 
-#define CAMERA_CROP_WIDTH      (CAMERA_CAPTURE_WIDTH - CAMERA_CROP_LEFT - CAMERA_CROP_RIGHT)
-#define CAMERA_CROP_HEIGHT     (CAMERA_CAPTURE_HEIGHT - CAMERA_CROP_TOP)
-#define CAMERA_CROP_BPP        (1)
+#define CAMERA_CROP_WIDTH (CAMERA_CAPTURE_WIDTH - CAMERA_CROP_LEFT - CAMERA_CROP_RIGHT)
+#define CAMERA_CROP_HEIGHT (CAMERA_CAPTURE_HEIGHT - CAMERA_CROP_TOP)
+#define CAMERA_CROP_BPP (1)
 
 #endif // __CONFIG_H__

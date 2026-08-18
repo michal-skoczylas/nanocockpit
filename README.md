@@ -68,13 +68,13 @@ NanoCockpit contains a number of GAP application examples. Select the PULP-Front
 
 #### NINA ESP32
 
-ESP-IDF v5.3.1 is required to build this application. Configure your computer to use the ESP-IDF Docker container as described [here](src/docker/espidf).
+ESP-IDF v5.3.3 is required to build this application. Configure your computer to use the ESP-IDF Docker container as described [here](src/docker/espidf).
 Then activate the ESP-IDF container:
 
 ```shell
 $ source venv/bin/activate
 $ cd src/nina
-$ esp 5.3.1
+$ esp 5.3.3
 ``` 
 
 ```shell
