@@ -1,0 +1,18 @@
+# Images and dataset dumps
+*.png
+*.jpg
+*.jpeg
+*.raw
+*.bmp
+*.ppm
+camera_raw/
+camera_rgb/
+tof/
+metadata.csv
+gesture_set_*/
+open_closed_dataset*/
+moje_zdjecia/
+res_test/
+17092026/
+ge/
+
