@@ -55,7 +55,8 @@ setup(
         'console_scripts': [
             'plt_viewer = aideck_cpx_streamer.plt_viewer:main',
             'ros_viewer = aideck_cpx_streamer.ros_viewer:main',
-            'gesture_detector_viewer = aideck_cpx_streamer.gesture_detector_viewer:main'
+            'gesture_detector_viewer = aideck_cpx_streamer.gesture_detector_viewer:main',
+            'gesture_flight_controller = aideck_cpx_streamer.gesture_flight_controller:main'
         ],
     },
 )
