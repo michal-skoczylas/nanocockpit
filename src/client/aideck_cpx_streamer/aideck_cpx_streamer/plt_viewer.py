@@ -29,8 +29,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import cv2
 
-from .cpx import StreamerClient, StreamerMetadata
-from .utils import create_dataset_dir, FrameSaver
+from cpx import StreamerClient, StreamerMetadata
+from utils import create_dataset_dir, FrameSaver
 
 
 class PltViewer:

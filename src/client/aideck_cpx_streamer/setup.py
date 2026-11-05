@@ -54,7 +54,8 @@ setup(
     entry_points={
         'console_scripts': [
             'plt_viewer = aideck_cpx_streamer.plt_viewer:main',
-            'ros_viewer = aideck_cpx_streamer.ros_viewer:main'
+            'ros_viewer = aideck_cpx_streamer.ros_viewer:main',
+            'gesture_detector_viewer = aideck_cpx_streamer.gesture_detector_viewer:main'
         ],
     },
 )

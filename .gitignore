@@ -5,6 +5,17 @@ __pycache__/
 
 # C extensions
 *.so
+# Images and dataset dumps
+*.jpg
+*.jpeg
+*.png
+*.bmp
+*.ppm
+*.raw
+camera_raw/
+camera_rgb/
+tof/
+metadata.csv
 
 # Distribution / packaging
 .Python
@@ -171,8 +182,11 @@ log.txt
 *.bag
 *.active
 
-## ESP-IDF
+## ESP-IDF / OpenOCD
 sdkconfig.old
+openocd
+openocd.log
+
 
 ## ROS
 /log
