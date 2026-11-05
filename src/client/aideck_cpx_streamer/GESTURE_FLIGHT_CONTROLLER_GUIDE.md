@@ -129,7 +129,7 @@ python src/client/aideck_cpx_streamer/aideck_cpx_streamer/gesture_flight_control
 
 ---
 
-## 📋 7. Lista Opcji CLI (Flagi)
+## 📋 7. Lista Opcji CLI (Flagi i Parametry)
 
 | Argument | Domyślnie | Opis |
 |---|:---:|---|
@@ -137,4 +137,57 @@ python src/client/aideck_cpx_streamer/aideck_cpx_streamer/gesture_flight_control
 | `-port` | `5000` | Port transmisji strumienia wideo. |
 | `--uri` | `radio://0/80/2M/E7E7E7E7E6` | Adres Crazyradio połączenia z Crazyflie. |
 | `--dry-run` | `False` | Tryb symulacyjny (test wizji bez łączenia z radiem drona). |
+| `--mode` | `all` | Tryb gestów: `all` (8 gestów) lub `binary` (tylko open/close). |
+| `--yolo-weights` | `auto` | Własna ścieżka do pliku wag detektora dłoni YOLO (`.pt`). |
+| `--resnet-weights`| `auto` | Własna ścieżka do wag klasyfikatora gestów ResNet (`.pt` lub `.torchscript.pt`). |
+| `--device` | `auto` | Akcelerator obliczeń: `auto` (MPS na Macu, CUDA na GPU, CPU). |
+| `--conf` | `0.35` | Minimalny próg pewności detekcji dłoni YOLO. |
+
+---
+
+## 🎯 8. Konfiguracja i Podmiana Modeli AI
+
+Skrypt umożliwia elastyczne wskazywanie modeli zarówno **bezpośrednio w kodzie**, jak i **przez parametry w terminalu**.
+
+### A. Wpisywanie ścieżek bezpośrednio w kodzie (`gesture_flight_controller.py`)
+Na samej górze pliku (linie 43–47) znajduje się dedykowana sekcja konfiguracyjna:
+```python
+# ==============================================================================
+# 🎯 KONFIGURACJA MODELI AI (możesz wpisać ścieżki bezpośrednio tutaj)
+# ==============================================================================
+# Jeśli pozostawisz None, skrypt automatycznie odnajdzie najlepsze wagi w projekcie:
+YOLO_MODEL_PATH = "dane/weights/yolo_hand_detector.pt"
+RESNET_MODEL_PATH = "dane/weights/resnet_all_gestures/resnet_all8_best.torchscript.pt"
+RESNET_BINARY_PATH = "dane/weights/resnet18_binary_best.torchscript.pt"
+```
+*Gdy pozostawisz wartość `None`, skrypt samoczynnie przeszuka projekt i wybierze najlepsze dostępne wagi.*
+
+### B. Przekazywanie ścieżek z linii poleceń (CLI)
+Argumenty przekazane w terminalu mają **najwyższy priorytet** (nadpisują wartości wpisane w kodzie):
+```bash
+python gesture_flight_controller.py \
+  --yolo-weights dane/weights/2026-11-04/yolo_hand_detector_best.pt \
+  --resnet-weights dane/weights/resnet_all_gestures/exp_v4_res34_all8_hires_best.pt \
+  --dry-run
+```
+
+### C. Hierarchia wyboru modeli:
+1. **Flagi CLI** (`--yolo-weights`, `--resnet-weights`) $\rightarrow$ *najwyższy priorytet*,
+2. **Zmienne w kodzie** (`YOLO_MODEL_PATH`, `RESNET_MODEL_PATH`),
+3. **Automatyczna detekcja** $\rightarrow$ przeszukanie katalogu `dane/weights/` i wybór domyślnych wag.
+
+---
+
+## 🧠 9. Zestawienie Przygotowanych Modeli w Projekcie
+
+| Kategoria | Plik wag | Typ / Format | Dokładność | Zastosowanie |
+|---|---|:---:|:---:|---|
+| **YOLO** | `dane/weights/yolo_hand_detector.pt` | PyTorch YOLO Nano | mAP50 ~91% | Domyślna detekcja dłoni w kadrze |
+| **YOLO** | `dane/weights/2026-11-04/yolo_hand_detector_best.pt` | PyTorch YOLO Nano | Najnowsza | Alternatywny model z ostatniego treningu |
+| **ResNet** | `dane/weights/resnet_all_gestures/resnet_all8_best.torchscript.pt` | TorchScript ResNet-34 | 89.36% Val | Domyślna klasyfikacja 8 gestów (szybka) |
+| **ResNet** | `dane/weights/resnet_all_gestures/exp_v4_res34_all8_hires_best.pt` | PyTorch ResNet-34 | 89.36% Val | Wagi PyTorch (state_dict) 8 gestów |
+| **ResNet** | `dane/weights/resnet18_binary_best.torchscript.pt` | TorchScript ResNet-18 | 97.80% Val | Tryb binarny (openhand vs closehand) |
+
+> [!TIP]
+> **TorchScript vs Standardowe wagi PyTorch**: Pliki `.torchscript.pt` są zoptymalizowane do natychmiastowej inferencji i nie wymagają definicji klasy PyTorch w kodzie. Skrypt automatycznie wykrywa format pliku i ładuje go we właściwy sposób. Na komputerach Mac z procesorami Apple Silicon akcelerator **MPS (Metal)** jest włączany automatycznie, zapewniając 30+ FPS.
 

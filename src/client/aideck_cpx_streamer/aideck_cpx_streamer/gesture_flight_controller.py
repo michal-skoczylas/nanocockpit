@@ -38,6 +38,14 @@ from aideck_cpx_streamer.gesture_detector_viewer import (
     GESTURE_COLORS,
 )
 
+# ==============================================================================
+# 🎯 KONFIGURACJA MODELI AI (możesz wpisać ścieżki bezpośrednio tutaj)
+# ==============================================================================
+# Jeśli pozostawisz None, skrypt automatycznie odnajdzie najlepsze wagi w projekcie.
+YOLO_MODEL_PATH = None       # np. "dane/weights/yolo_hand_detector.pt"
+RESNET_MODEL_PATH = None     # np. "dane/weights/resnet_all_gestures/resnet_all8_best.torchscript.pt"
+RESNET_BINARY_PATH = None    # np. "dane/weights/resnet18_binary_best.torchscript.pt"
+
 # Bardzo bezpieczne, niskie parametry lotu
 URI = uri_helper.uri_from_env(default="radio://0/80/2M/E7E7E7E7E6")
 DEFAULT_HEIGHT = 0.40   # niska wysokość bazowa [m] (40 cm)
@@ -134,6 +142,11 @@ def main():
     parser.add_argument("-port", type=int, default=5000, help="Port AI-Deck")
     parser.add_argument("--uri", default=URI, help="URI radia Crazyflie")
     parser.add_argument("--dry-run", action="store_true", help="Test wizji bez włączania drona")
+    parser.add_argument("--mode", default="all", choices=["all", "binary"], help="Tryb gestów: 'all' (8 gestów) lub 'binary' (open/close)")
+    parser.add_argument("--yolo-weights", default=None, help="Ścieżka do wag modelu YOLO (opcjonalnie)")
+    parser.add_argument("--resnet-weights", default=None, help="Ścieżka do wag modelu ResNet (opcjonalnie)")
+    parser.add_argument("--device", default="auto", choices=["auto", "mps", "cuda", "cpu"], help="Urządzenie obliczeniowe")
+    parser.add_argument("--conf", type=float, default=0.35, help="Próg detekcji dłoni YOLO")
     args = parser.parse_args()
 
     # Bezpieczna obsługa Ctrl+C
@@ -143,14 +156,48 @@ def main():
 
     signal.signal(signal.SIGINT, _sigint_handler)
 
-    # Załadowanie modeli YOLO + ResNet
+    # Załadowanie modeli YOLO + ResNet (ścieżka z kodu lub z argumentu CLI)
     thesis_dir = Path(__file__).resolve().parents[4]
     dane_weights = thesis_dir / "dane" / "weights"
+
+    selected_yolo = args.yolo_weights or YOLO_MODEL_PATH
+    selected_resnet = args.resnet_weights or RESNET_MODEL_PATH
+    selected_bin = RESNET_BINARY_PATH
+
+    yolo_candidates = [
+        Path(selected_yolo) if selected_yolo else None,
+        dane_weights / "yolo_hand_detector.pt",
+        dane_weights / "2026-11-04" / "yolo_hand_detector_best.pt",
+        Path("weights/yolo_hand_detector.pt"),
+    ]
+    all_candidates = [
+        Path(selected_resnet) if selected_resnet else None,
+        dane_weights / "resnet_all_gestures" / "resnet_all8_best.torchscript.pt",
+        dane_weights / "resnet_all_gestures" / "resnet_all8_best_2026-11-04.torchscript.pt",
+        dane_weights / "resnet_all_gestures" / "exp_v4_res34_all8_hires_best.pt",
+    ]
+    bin_candidates = [
+        Path(selected_bin) if selected_bin else None,
+        dane_weights / "resnet18_binary_best.torchscript.pt",
+        dane_weights / "exp_v2_resnet18_binary_hires_drop_best.pt",
+    ]
+
+    yolo_file = find_weights_file([p for p in yolo_candidates if p is not None])
+    resnet_all_file = find_weights_file([p for p in all_candidates if p is not None])
+    resnet_bin_file = find_weights_file([p for p in bin_candidates if p is not None])
+
+    print("📦 [Załadowane Modele AI]:")
+    print(f"   Detektor YOLO:   {yolo_file}")
+    print(f"   Klasyfikator 8G: {resnet_all_file}")
+    print(f"   Klasyfikator 2G: {resnet_bin_file}")
+
     detector = DroneGestureDetector(
-        yolo_path=find_weights_file([dane_weights / "yolo_hand_detector.pt"]),
-        classifier_bin_path=find_weights_file([dane_weights / "resnet18_binary_best.torchscript.pt"]),
-        classifier_all_path=find_weights_file([dane_weights / "resnet_all_gestures" / "resnet_all8_best.torchscript.pt"]),
-        mode="all",
+        yolo_path=yolo_file,
+        classifier_bin_path=resnet_bin_file,
+        classifier_all_path=resnet_all_file,
+        mode=args.mode,
+        conf_thresh=args.conf,
+        device_str=args.device,
     )
 
     # Uruchomienie wątku drona (bez daemon=True, z kontrolowanym wyjściem)
