@@ -1,4 +1,12 @@
+# Model weights
+*.pt
+*.pth
+*.onnx
+models/
+weights/
+
 # Images and dataset dumps
+
 *.png
 *.jpg
 *.jpeg

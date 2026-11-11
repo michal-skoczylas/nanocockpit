@@ -139,6 +139,16 @@ dmypy.json
 /v1
 *.ckpt
 
+# AI Models & weights
+*.pt
+*.pth
+*.onnx
+*.engine
+*.tflite
+models/
+weights/
+
+
 ### macOS ###
 # General
 .DS_Store

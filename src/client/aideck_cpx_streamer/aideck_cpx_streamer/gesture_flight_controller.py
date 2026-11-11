@@ -23,6 +23,7 @@ import signal
 import argparse
 import threading
 from pathlib import Path
+from collections import deque, Counter
 
 import cv2
 import cflib.crtp
@@ -34,26 +35,34 @@ from cflib.utils import uri_helper
 from aideck_cpx_streamer.cpx import StreamerClient
 from aideck_cpx_streamer.gesture_detector_viewer import (
     DroneGestureDetector,
-    find_weights_file,
     GESTURE_COLORS,
 )
 
 # ==============================================================================
-# 🎯 KONFIGURACJA MODELI AI (możesz wpisać ścieżki bezpośrednio tutaj)
+# 🎯 ŚCIEŻKI DO MODELI AI (wpisz ścieżki bezpośrednio tutaj w kodzie)
 # ==============================================================================
-# Jeśli pozostawisz None, skrypt automatycznie odnajdzie najlepsze wagi w projekcie.
-YOLO_MODEL_PATH = None       # np. "dane/weights/yolo_hand_detector.pt"
-RESNET_MODEL_PATH = None     # np. "dane/weights/resnet_all_gestures/resnet_all8_best.torchscript.pt"
-RESNET_BINARY_PATH = None    # np. "dane/weights/resnet18_binary_best.torchscript.pt"
+YOLO_MODEL_PATH = "/Users/michalskoczylas/Documents/studia/thesis/nanocockpit/src/client/aideck_cpx_streamer/models/yolo_hand_detector_2026-11-04.pt"
+RESNET_MODEL_PATH = "/Users/michalskoczylas/Documents/studia/thesis/nanocockpit/src/client/aideck_cpx_streamer/models/resnet_best_2026-11-04.torchscript.pt"
+RESNET_BINARY_PATH = None  # Opcjonalnie: ścieżka dla modelu 2-klasowego (jeśli None, używa RESNET_MODEL_PATH)
+
 
 # Bardzo bezpieczne, niskie parametry lotu
-URI = uri_helper.uri_from_env(default="radio://0/80/2M/E7E7E7E7E6")
-DEFAULT_HEIGHT = 0.40   # niska wysokość bazowa [m] (40 cm)
+URI = uri_helper.uri_from_env(default="radio://0/99/2M/E7E7E7E7E7")
+DEFAULT_HEIGHT = 0.50   # niska wysokość bazowa [m] (50 cm)
 STEP_DIST = 0.10        # mały mikro-krok [m] (10 cm)
 VELOCITY = 0.08         # bardzo niska, łagodna prędkość ruchu [m/s] (8 cm/s)
 CONF_THRESH = 0.65      # próg pewności ResNet
-DEBOUNCE_FRAMES = 3     # wymagana liczba kolejnych klatek gestu
 WATCHDOG_TIMEOUT = 2.0  # maks. czas [s] bez klatki z kamery przed lądowaniem awaryjnym
+
+# ==============================================================================
+# 🪟 OKNO PRZESUWNE DETEKCJI GESTÓW (Sliding Window)
+# ==============================================================================
+# Okno analizuje N ostatnich klatek. Aby gest został aktywowany, musi wystąpić
+# w co najmniej M klatkach w obrębie tego okna (M z N klatek).
+WINDOW_SIZE = 10           # N: rozmiar okna przesuwnego (liczba ostatnich klatek)
+MIN_GESTURE_FRAMES = 7     # M: minimalna liczba klatek z danym gestem do wyzwolenia akcji
+ACTIVATION_COOLDOWN = 0.6  # [s] minimalny odstęp czasu przed kolejną aktywacją tego samego gestu
+
 
 GESTURE_ACTIONS = {
     "openhand": "START / PRZÓD (forward)",
@@ -147,7 +156,11 @@ def main():
     parser.add_argument("--resnet-weights", default=None, help="Ścieżka do wag modelu ResNet (opcjonalnie)")
     parser.add_argument("--device", default="auto", choices=["auto", "mps", "cuda", "cpu"], help="Urządzenie obliczeniowe")
     parser.add_argument("--conf", type=float, default=0.35, help="Próg detekcji dłoni YOLO")
+    parser.add_argument("--window-size", type=int, default=WINDOW_SIZE, help="Rozmiar okna przesuwnego (N klatek)")
+    parser.add_argument("--min-frames", type=int, default=MIN_GESTURE_FRAMES, help="Minimalna liczba klatek z gestem w oknie (M)")
+    parser.add_argument("--cooldown", type=float, default=ACTIVATION_COOLDOWN, help="Minimalny odstęp [s] między kolejnymi aktywacjami tego samego gestu")
     args = parser.parse_args()
+
 
     # Bezpieczna obsługa Ctrl+C
     def _sigint_handler(sig, frame):
@@ -156,40 +169,37 @@ def main():
 
     signal.signal(signal.SIGINT, _sigint_handler)
 
-    # Załadowanie modeli YOLO + ResNet (ścieżka z kodu lub z argumentu CLI)
-    thesis_dir = Path(__file__).resolve().parents[4]
-    dane_weights = thesis_dir / "dane" / "weights"
+    # Ścieżki do modeli zdefiniowane w kodzie (lub opcjonalnie nadpisane z CLI)
+    yolo_raw = args.yolo_weights or YOLO_MODEL_PATH
+    resnet_raw = args.resnet_weights or RESNET_MODEL_PATH
+    bin_raw = RESNET_BINARY_PATH or resnet_raw
 
-    selected_yolo = args.yolo_weights or YOLO_MODEL_PATH
-    selected_resnet = args.resnet_weights or RESNET_MODEL_PATH
-    selected_bin = RESNET_BINARY_PATH
+    if not yolo_raw:
+        print("❌ [Błąd]: Nie podano ścieżki do modelu YOLO. Wpisz ścieżkę w zmiennej YOLO_MODEL_PATH w kodzie.")
+        sys.exit(1)
+    if not resnet_raw:
+        print("❌ [Błąd]: Nie podano ścieżki do modelu ResNet. Wpisz ścieżkę w zmiennej RESNET_MODEL_PATH w kodzie.")
+        sys.exit(1)
 
-    yolo_candidates = [
-        Path(selected_yolo) if selected_yolo else None,
-        dane_weights / "yolo_hand_detector.pt",
-        dane_weights / "2026-11-04" / "yolo_hand_detector_best.pt",
-        Path("weights/yolo_hand_detector.pt"),
-    ]
-    all_candidates = [
-        Path(selected_resnet) if selected_resnet else None,
-        dane_weights / "resnet_all_gestures" / "resnet_all8_best.torchscript.pt",
-        dane_weights / "resnet_all_gestures" / "resnet_all8_best_2026-11-04.torchscript.pt",
-        dane_weights / "resnet_all_gestures" / "exp_v4_res34_all8_hires_best.pt",
-    ]
-    bin_candidates = [
-        Path(selected_bin) if selected_bin else None,
-        dane_weights / "resnet18_binary_best.torchscript.pt",
-        dane_weights / "exp_v2_resnet18_binary_hires_drop_best.pt",
-    ]
+    yolo_file = Path(yolo_raw).expanduser().resolve()
+    resnet_all_file = Path(resnet_raw).expanduser().resolve()
+    resnet_bin_file = Path(bin_raw).expanduser().resolve()
 
-    yolo_file = find_weights_file([p for p in yolo_candidates if p is not None])
-    resnet_all_file = find_weights_file([p for p in all_candidates if p is not None])
-    resnet_bin_file = find_weights_file([p for p in bin_candidates if p is not None])
+    if not yolo_file.exists():
+        print(f"❌ [Błąd]: Plik modelu YOLO nie istnieje pod ścieżką:\n   {yolo_file}\nSprawdź zmienną YOLO_MODEL_PATH w kodzie.")
+        sys.exit(1)
+    if not resnet_all_file.exists():
+        print(f"❌ [Błąd]: Plik modelu ResNet nie istnieje pod ścieżką:\n   {resnet_all_file}\nSprawdź zmienną RESNET_MODEL_PATH w kodzie.")
+        sys.exit(1)
+    if not resnet_bin_file.exists():
+        print(f"❌ [Błąd]: Plik modelu binarnego ResNet nie istnieje pod ścieżką:\n   {resnet_bin_file}")
+        sys.exit(1)
 
     print("📦 [Załadowane Modele AI]:")
     print(f"   Detektor YOLO:   {yolo_file}")
     print(f"   Klasyfikator 8G: {resnet_all_file}")
-    print(f"   Klasyfikator 2G: {resnet_bin_file}")
+    if RESNET_BINARY_PATH:
+        print(f"   Klasyfikator 2G: {resnet_bin_file}")
 
     detector = DroneGestureDetector(
         yolo_path=yolo_file,
@@ -198,7 +208,9 @@ def main():
         mode=args.mode,
         conf_thresh=args.conf,
         device_str=args.device,
+        smooth_frames=1,  # Przekazujemy surowe predykcje klatek do naszego okna przesuwnego
     )
+
 
     # Uruchomienie wątku drona (bez daemon=True, z kontrolowanym wyjściem)
     drone_thread = None
@@ -210,12 +222,20 @@ def main():
         takeoff_event.set()
 
     client = StreamerClient(host=args.host, port=args.port, udp_send=True)
-    streak_gesture, streak_count = None, 0
+
+    # Inicjalizacja bufora okna przesuwnego
+    win_size = max(1, args.window_size)
+    min_frames = min(max(1, args.min_frames), win_size)
+    gesture_window = deque(maxlen=win_size)
+    last_activation_time = 0.0
+    last_activated_gesture = None
     current_action = "Czeka na start (OPENHAND / 't')"
+    window_status_str = f"0/{win_size}"
 
     print("\n" + "=" * 65)
     print("🚁 [KONTROLER CRAZYFLIE - TRYB BEZPIECZNY]")
     print(f"   Prędkość ruchu: {VELOCITY*100:.0f} cm/s | Krok: {STEP_DIST*100:.0f} cm")
+    print(f"   Okno przesuwne: {min_frames} z {win_size} klatek | Cooldown: {args.cooldown}s")
     print("   [t] - Start z ziemi | [q] / [ESC] - Bezpieczne lądowanie i wyjście")
     print("=" * 65 + "\n")
 
@@ -231,41 +251,54 @@ def main():
 
             # Detekcja AI
             info = detector.process_frame(vis)
-            gesture = info["gesture"]
+            raw_gesture = info["gesture"]
             conf = info["gesture_conf"]
 
-            # Debouncing: gest musi trwać N kolejnych klatek
-            if info["detected"] and conf >= CONF_THRESH:
-                streak_count = (streak_count + 1) if gesture == streak_gesture else 1
-                streak_gesture = gesture
+            # Kwalifikacja klatki: gest musi mieć zadowalającą pewność modelu
+            valid_frame_gesture = raw_gesture if (info["detected"] and conf >= CONF_THRESH) else None
+            gesture_window.append(valid_frame_gesture)
 
-                if streak_count >= DEBOUNCE_FRAMES:
-                    streak_count = 0
+            # Analiza okna przesuwnego (liczymy tylko zidentyfikowane gesty w buforze)
+            valid_gestures = [g for g in gesture_window if g is not None]
+            gesture_counts = Counter(valid_gestures)
+            top_gesture, count = gesture_counts.most_common(1)[0] if gesture_counts else (None, 0)
+            window_status_str = f"{top_gesture.upper()}: {count}/{win_size}" if top_gesture else f"brak (0/{win_size})"
+
+            # Sprawdzenie warunku aktywacji (M z N klatek)
+            if top_gesture and count >= min_frames:
+                now = time.time()
+                is_new_gesture = (top_gesture != last_activated_gesture)
+                cooldown_ok = (now - last_activation_time >= args.cooldown)
+
+                if is_new_gesture or cooldown_ok:
+                    last_activation_time = now
+                    last_activated_gesture = top_gesture
 
                     # Jeśli dron jeszcze nie wystartował, 'openhand' uruchamia start
                     if not takeoff_event.is_set():
-                        if gesture == "openhand":
-                            print("🛫 [Start] Wykryto OPENHAND - startuję drona!")
+                        if top_gesture == "openhand":
+                            print(f"🛫 [Start] Wykryto OPENHAND ({count}/{win_size} klatek) - startuję drona!")
                             takeoff_event.set()
                             current_action = "Startowanie..."
+                            gesture_window.clear()
                     else:
-                        current_action = GESTURE_ACTIONS.get(gesture, gesture)
+                        current_action = GESTURE_ACTIONS.get(top_gesture, top_gesture)
                         if args.dry_run:
-                            print(f"🟡 [DRY-RUN]: {gesture.upper()} -> {current_action}")
+                            print(f"🟡 [DRY-RUN]: {top_gesture.upper()} ({count}/{win_size} klatek) -> {current_action}")
                         else:
                             if cmd_queue.empty():
-                                cmd_queue.put(gesture)
-            else:
-                streak_count = 0
-                streak_gesture = None
+                                cmd_queue.put(top_gesture)
+                                print(f"🎮 [Aktywacja gestu]: {top_gesture.upper()} ({count}/{win_size} klatek) -> {current_action}")
+                        # Czyścimy okno po aktywacji, aby wymagać nowego ustabilizowania gestu
+                        gesture_window.clear()
 
             # --- PODGLĄD WIDEO ---
             # 1. Bounding box dłoni
             if info["detected"] and info["box"] is not None:
                 x1, y1, x2, y2 = info["box"]
-                color = GESTURE_COLORS.get(gesture, (0, 255, 0))
+                color = GESTURE_COLORS.get(raw_gesture, (0, 255, 0))
                 cv2.rectangle(vis, (x1, y1), (x2, y2), color, 2)
-                label = f"{gesture.upper()} {conf*100:.0f}%"
+                label = f"{raw_gesture.upper()} {conf*100:.0f}%"
                 cv2.putText(vis, label, (x1, max(18, y1 - 6)), cv2.FONT_HERSHEY_SIMPLEX, 0.48, color, 2)
 
             # 2. Miniatura wycinka dłoni (PiP)
@@ -276,7 +309,9 @@ def main():
 
             # 3. Pasek statusu
             cv2.rectangle(vis, (0, 0), (w, 28), (20, 20, 20), -1)
-            cv2.putText(vis, f"AKCJA: {current_action}", (8, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (0, 255, 255), 1, cv2.LINE_AA)
+            hud_text = f"AKCJA: {current_action} | OKNO [{min_frames}/{win_size}]: {window_status_str}"
+            cv2.putText(vis, hud_text, (8, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.44, (0, 255, 255), 1, cv2.LINE_AA)
+
 
             cv2.imshow("NanoCockpit AI-Deck: Podglad Kamery Drona", vis)
 
