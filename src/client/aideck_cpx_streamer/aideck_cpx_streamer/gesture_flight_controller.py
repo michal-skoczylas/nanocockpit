@@ -18,6 +18,8 @@ Zawiera podgląd z kamery AI-Deck oraz kluczowe zabezpieczenia lotu.
 
 import sys
 import time
+import json
+import socket
 import queue
 import signal
 import argparse
@@ -82,9 +84,79 @@ takeoff_event = threading.Event()
 last_frame_time = time.time()
 
 
-def drone_worker(uri: str):
+class TelemetryPublisher:
+    """Wysyła bieżący stan kontrolera i drona przez UDP JSON do skryptu rejestrującego (np. optitrack_flight_logger)."""
+
+    def __init__(self, host: str = "127.0.0.1", port: int = 12112, enabled: bool = True):
+        self.host = host
+        self.port = port
+        self.enabled = enabled
+        self._sock = None
+        if self.enabled:
+            try:
+                self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                print(f"📡 [Telemetria] Aktywne nadawanie UDP na {self.host}:{self.port}")
+            except Exception as e:
+                print(f"⚠️ [Telemetria] Błąd tworzenia gniazda UDP: {e}")
+                self.enabled = False
+
+        self._lock = threading.Lock()
+        self.state = {
+            "flight_state": "GROUND",
+            "active_command": "idle",
+            "command_timestamp": time.time(),
+            "detected_gesture": None,
+            "gesture_conf": 0.0,
+            "gesture_timestamp": time.time(),
+            "window_status": "brak",
+        }
+
+    def update_flight(self, flight_state: str = None, command: str = None):
+        with self._lock:
+            now = time.time()
+            if flight_state is not None:
+                self.state["flight_state"] = flight_state
+            if command is not None:
+                self.state["active_command"] = command
+                self.state["command_timestamp"] = now
+        self.send()
+
+    def update_vision(self, gesture: str = None, conf: float = 0.0, window_status: str = None):
+        with self._lock:
+            now = time.time()
+            self.state["detected_gesture"] = gesture
+            self.state["gesture_conf"] = round(float(conf), 4)
+            self.state["gesture_timestamp"] = now
+            if window_status is not None:
+                self.state["window_status"] = window_status
+        self.send()
+
+    def send(self):
+        if not self.enabled or self._sock is None:
+            return
+        with self._lock:
+            payload = dict(self.state)
+            payload["timestamp"] = time.time()
+        try:
+            msg = json.dumps(payload).encode("utf-8")
+            self._sock.sendto(msg, (self.host, self.port))
+        except Exception:
+            pass
+
+    def close(self):
+        if self._sock:
+            try:
+                self._sock.close()
+            except Exception:
+                pass
+            self._sock = None
+
+
+def drone_worker(uri: str, telemetry: TelemetryPublisher = None):
     """Wątek drona: bezpieczny start, obsługa komend i lądowanie awaryjne."""
     global last_frame_time
+    if telemetry:
+        telemetry.update_flight(flight_state="GROUND", command="idle")
     print(f"[Crazyflie] Inicjalizacja CRTP i łączenie z {uri}...")
     cflib.crtp.init_drivers()
 
@@ -101,13 +173,21 @@ def drone_worker(uri: str):
                 return
 
             # 2. Start w powietrze (MotionCommander)
+            if telemetry:
+                telemetry.update_flight(flight_state="TAKING_OFF", command="takeoff")
             print(f"[Crazyflie] Startuję powoli na bezpieczną wysokość {DEFAULT_HEIGHT}m...")
             with MotionCommander(scf, default_height=DEFAULT_HEIGHT) as mc:
+                if telemetry:
+                    telemetry.update_flight(flight_state="FLYING", command="hover")
                 while not stop_event.is_set():
                     # Watchdog: brak obrazu z Wi-Fi -> lądowanie awaryjne
                     if time.time() - last_frame_time > WATCHDOG_TIMEOUT:
                         print("⚠️ [Watchdog Failsafe] Utrata klatek z kamery > 2s! Ląduję...")
+                        if telemetry:
+                            telemetry.update_flight(flight_state="LANDING", command="failsafe_land")
                         mc.land()
+                        if telemetry:
+                            telemetry.update_flight(flight_state="LANDED", command="idle")
                         stop_event.set()
                         break
 
@@ -120,26 +200,60 @@ def drone_worker(uri: str):
 
                     if gesture == "closehand":
                         print("🛑 [Lądowanie] Zamknięta dłoń - ląduję natychmiast.")
+                        if telemetry:
+                            telemetry.update_flight(flight_state="LANDING", command="land")
                         mc.land()
+                        if telemetry:
+                            telemetry.update_flight(flight_state="LANDED", command="idle")
                         stop_event.set()
                         break
                     elif gesture == "openhand":
+                        if telemetry:
+                            telemetry.update_flight(flight_state="FLYING", command="forward")
                         mc.forward(STEP_DIST, velocity=VELOCITY)
+                        if telemetry:
+                            telemetry.update_flight(flight_state="FLYING", command="hover")
                     elif gesture == "shaka":
+                        if telemetry:
+                            telemetry.update_flight(flight_state="FLYING", command="back")
                         mc.back(STEP_DIST, velocity=VELOCITY)
+                        if telemetry:
+                            telemetry.update_flight(flight_state="FLYING", command="hover")
                     elif gesture == "left":
+                        if telemetry:
+                            telemetry.update_flight(flight_state="FLYING", command="left")
                         mc.left(STEP_DIST, velocity=VELOCITY)
+                        if telemetry:
+                            telemetry.update_flight(flight_state="FLYING", command="hover")
                     elif gesture == "right":
+                        if telemetry:
+                            telemetry.update_flight(flight_state="FLYING", command="right")
                         mc.right(STEP_DIST, velocity=VELOCITY)
+                        if telemetry:
+                            telemetry.update_flight(flight_state="FLYING", command="hover")
                     elif gesture == "v":
+                        if telemetry:
+                            telemetry.update_flight(flight_state="FLYING", command="up")
                         mc.up(STEP_DIST, velocity=VELOCITY)
+                        if telemetry:
+                            telemetry.update_flight(flight_state="FLYING", command="hover")
                     elif gesture == "dislike":
+                        if telemetry:
+                            telemetry.update_flight(flight_state="FLYING", command="down")
                         mc.down(STEP_DIST, velocity=VELOCITY)
+                        if telemetry:
+                            telemetry.update_flight(flight_state="FLYING", command="hover")
                     elif gesture == "ok":
+                        if telemetry:
+                            telemetry.update_flight(flight_state="FLYING", command="stop")
                         mc.stop()
+                        if telemetry:
+                            telemetry.update_flight(flight_state="FLYING", command="hover")
     except Exception as e:
         print(f"❌ [Crazyflie Błąd]: {e}")
     finally:
+        if telemetry:
+            telemetry.update_flight(flight_state="LANDED", command="idle")
         stop_event.set()
         print("[Crazyflie] Wątek drona zakończony bezpiecznie.")
 
@@ -159,6 +273,9 @@ def main():
     parser.add_argument("--window-size", type=int, default=WINDOW_SIZE, help="Rozmiar okna przesuwnego (N klatek)")
     parser.add_argument("--min-frames", type=int, default=MIN_GESTURE_FRAMES, help="Minimalna liczba klatek z gestem w oknie (M)")
     parser.add_argument("--cooldown", type=float, default=ACTIVATION_COOLDOWN, help="Minimalny odstęp [s] między kolejnymi aktywacjami tego samego gestu")
+    parser.add_argument("--telemetry-host", default="127.0.0.1", help="Host docelowy dla telemetrii (skrypt tracking/logger)")
+    parser.add_argument("--telemetry-port", type=int, default=12112, help="Port UDP dla telemetrii (skrypt tracking/logger)")
+    parser.add_argument("--no-telemetry", action="store_true", help="Wyłącz nadawanie telemetrii UDP")
     args = parser.parse_args()
 
 
@@ -211,14 +328,21 @@ def main():
         smooth_frames=1,  # Przekazujemy surowe predykcje klatek do naszego okna przesuwnego
     )
 
+    # Inicjalizacja modułu telemetrii UDP
+    telemetry = TelemetryPublisher(
+        host=args.telemetry_host,
+        port=args.telemetry_port,
+        enabled=not args.no_telemetry,
+    )
 
     # Uruchomienie wątku drona (bez daemon=True, z kontrolowanym wyjściem)
     drone_thread = None
     if not args.dry_run:
-        drone_thread = threading.Thread(target=drone_worker, args=(args.uri,), daemon=False)
+        drone_thread = threading.Thread(target=drone_worker, args=(args.uri, telemetry), daemon=False)
         drone_thread.start()
     else:
         print("🟡 [TRYB DRY-RUN] Symulacja bez łączenia z dronem.")
+        telemetry.update_flight(flight_state="GROUND", command="idle")
         takeoff_event.set()
 
     client = StreamerClient(host=args.host, port=args.port, udp_send=True)
@@ -236,6 +360,8 @@ def main():
     print("🚁 [KONTROLER CRAZYFLIE - TRYB BEZPIECZNY]")
     print(f"   Prędkość ruchu: {VELOCITY*100:.0f} cm/s | Krok: {STEP_DIST*100:.0f} cm")
     print(f"   Okno przesuwne: {min_frames} z {win_size} klatek | Cooldown: {args.cooldown}s")
+    if not args.no_telemetry:
+        print(f"   Telemetria UDP: {args.telemetry_host}:{args.telemetry_port}")
     print("   [t] - Start z ziemi | [q] / [ESC] - Bezpieczne lądowanie i wyjście")
     print("=" * 65 + "\n")
 
@@ -264,6 +390,13 @@ def main():
             top_gesture, count = gesture_counts.most_common(1)[0] if gesture_counts else (None, 0)
             window_status_str = f"{top_gesture.upper()}: {count}/{win_size}" if top_gesture else f"brak (0/{win_size})"
 
+            # Publikacja stanu detekcji w telemetrii
+            telemetry.update_vision(
+                gesture=valid_frame_gesture,
+                conf=conf if info["detected"] else 0.0,
+                window_status=window_status_str,
+            )
+
             # Sprawdzenie warunku aktywacji (M z N klatek)
             if top_gesture and count >= min_frames:
                 now = time.time()
@@ -280,11 +413,14 @@ def main():
                             print(f"🛫 [Start] Wykryto OPENHAND ({count}/{win_size} klatek) - startuję drona!")
                             takeoff_event.set()
                             current_action = "Startowanie..."
+                            if args.dry_run:
+                                telemetry.update_flight(flight_state="FLYING", command="hover")
                             gesture_window.clear()
                     else:
                         current_action = GESTURE_ACTIONS.get(top_gesture, top_gesture)
                         if args.dry_run:
                             print(f"🟡 [DRY-RUN]: {top_gesture.upper()} ({count}/{win_size} klatek) -> {current_action}")
+                            telemetry.update_flight(flight_state="FLYING", command=top_gesture)
                         else:
                             if cmd_queue.empty():
                                 cmd_queue.put(top_gesture)
@@ -331,9 +467,12 @@ def main():
                 print("🛫 [Klawiatura] Start drona klawiszem 't'")
                 takeoff_event.set()
                 current_action = "Startowanie..."
+                if args.dry_run:
+                    telemetry.update_flight(flight_state="FLYING", command="hover")
 
     finally:
         stop_event.set()
+        telemetry.close()
         client.shutdown()
         cv2.destroyAllWindows()
         if drone_thread and drone_thread.is_alive():
