@@ -12,8 +12,8 @@ Zawiera podgląd z kamery AI-Deck oraz kluczowe zabezpieczenia lotu.
   - right     -> Ruch w prawo (mc.right)
   - v         -> Wznoszenie w górę (mc.up)
   - dislike   -> Opadanie w dół (mc.down)
-  - ok        -> Zatrzymanie / zawis (mc.stop)
-  - closehand -> Bezpieczne lądowanie (mc.land)
+  - ok        -> Bezpieczne lądowanie (mc.land)
+  - closehand -> Zatrzymanie / zawis (mc.stop)
 """
 
 import sys
@@ -73,8 +73,8 @@ GESTURE_ACTIONS = {
     "right": "PRAWO (right)",
     "v": "GÓRA (up)",
     "dislike": "DÓŁ (down)",
-    "ok": "STOP / HOVER",
-    "closehand": "LĄDOWANIE (land)",
+    "closehand": "STOP / HOVER",
+    "ok": "LĄDOWANIE (land)",
 }
 
 # Kolejki i zdarzenia synchronizujące
@@ -198,8 +198,8 @@ def drone_worker(uri: str, telemetry: TelemetryPublisher = None):
 
                     print(f"🎮 [Ruch drona]: {GESTURE_ACTIONS.get(gesture, gesture)}")
 
-                    if gesture == "closehand":
-                        print("🛑 [Lądowanie] Zamknięta dłoń - ląduję natychmiast.")
+                    if gesture == "ok":
+                        print("🛑 [Lądowanie] Gest OK - ląduję natychmiast.")
                         if telemetry:
                             telemetry.update_flight(flight_state="LANDING", command="land")
                         mc.land()
@@ -207,6 +207,13 @@ def drone_worker(uri: str, telemetry: TelemetryPublisher = None):
                             telemetry.update_flight(flight_state="LANDED", command="idle")
                         stop_event.set()
                         break
+                    elif gesture == "closehand":
+                        print("✋ [Zawis / Stop] Pięść (closehand) - zatrzymanie w miejscu.")
+                        if telemetry:
+                            telemetry.update_flight(flight_state="FLYING", command="stop")
+                        mc.stop()
+                        if telemetry:
+                            telemetry.update_flight(flight_state="FLYING", command="hover")
                     elif gesture == "openhand":
                         if telemetry:
                             telemetry.update_flight(flight_state="FLYING", command="forward")
@@ -241,12 +248,6 @@ def drone_worker(uri: str, telemetry: TelemetryPublisher = None):
                         if telemetry:
                             telemetry.update_flight(flight_state="FLYING", command="down")
                         mc.down(STEP_DIST, velocity=VELOCITY)
-                        if telemetry:
-                            telemetry.update_flight(flight_state="FLYING", command="hover")
-                    elif gesture == "ok":
-                        if telemetry:
-                            telemetry.update_flight(flight_state="FLYING", command="stop")
-                        mc.stop()
                         if telemetry:
                             telemetry.update_flight(flight_state="FLYING", command="hover")
     except Exception as e:

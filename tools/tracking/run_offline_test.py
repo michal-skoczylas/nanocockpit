@@ -58,12 +58,12 @@ def main():
         # (czas trwania [s], stan, komenda, gest, conf)
         (1.5, "GROUND", "idle", "none", 0.0),
         (2.0, "TAKING_OFF", "takeoff", "openhand", 0.94),
-        (2.0, "FLYING", "hover", "ok", 0.88),
+        (2.0, "FLYING", "hover", "closehand", 0.88),
         (2.5, "FLYING", "forward", "openhand", 0.96),
         (1.5, "FLYING", "hover", "none", 0.0),
         (2.0, "FLYING", "up", "v", 0.91),
         (1.5, "FLYING", "hover", "none", 0.0),
-        (2.0, "LANDING", "land", "closehand", 0.98),
+        (2.0, "LANDING", "land", "ok", 0.98),
         (1.0, "LANDED", "idle", "none", 0.0),
     ]
 
