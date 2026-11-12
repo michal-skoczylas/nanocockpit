@@ -40,39 +40,71 @@ CMD_COLORS = {
 
 
 def plot_trajectory_3d(df: pd.DataFrame, out_path: Path = None, show: bool = True):
-    """Wykres 3D trajektorii lotu."""
-    fig = plt.figure(figsize=(10, 8))
+    """Wykres 3D trajektorii lotu - ciągła linia ze zmianą kolorów wg komend."""
+    fig = plt.figure(figsize=(11, 8))
     ax = fig.add_subplot(111, projection="3d")
 
-    # Rysujemy trasę drona segmentami w zależności od aktywnej komendy
-    unique_cmds = df["command"].unique()
-    for cmd in unique_cmds:
-        mask = df["command"] == cmd
+    # 1. Rzut trajektorii na płaszczyznę podłogi (cień pomocniczy do percepcji 3D)
+    z_floor = max(0.0, df["pos_z"].min() - 0.05)
+    ax.plot(
+        df["pos_x"],
+        df["pos_y"],
+        np.full_like(df["pos_z"], z_floor),
+        color="#bbbbbb",
+        linestyle=":",
+        linewidth=1.2,
+        alpha=0.6,
+        label="Rzut na podłogę",
+    )
+
+    # 2. Rysujemy ciągłą linię trajektorii segmentami odpowiadającymi komendom ruchu
+    change_indices = df.index[df["command"] != df["command"].shift()].tolist()
+    if 0 not in change_indices:
+        change_indices = [0] + change_indices
+    change_indices.append(len(df))
+
+    labeled_cmds = set()
+    for i in range(len(change_indices) - 1):
+        idx_start = change_indices[i]
+        idx_end = change_indices[i + 1]
+        # Bierzemy punkt styku z następnym segmentem (idx_end + 1), aby linia była idealnie ciągła
+        slice_end = min(len(df), idx_end + 1)
+        seg = df.iloc[idx_start:slice_end]
+
+        cmd = str(df.loc[idx_start, "command"])
         color = CMD_COLORS.get(cmd, "#333333")
-        ax.scatter(
-            df.loc[mask, "pos_x"],
-            df.loc[mask, "pos_y"],
-            df.loc[mask, "pos_z"],
-            label=f"Komenda: {cmd}",
+
+        label = f"Komenda: {cmd}" if cmd not in labeled_cmds else None
+        if label:
+            labeled_cmds.add(cmd)
+
+        # Ciągła linia trajektorii
+        ax.plot(
+            seg["pos_x"],
+            seg["pos_y"],
+            seg["pos_z"],
             color=color,
-            s=8,
-            alpha=0.7,
+            linewidth=2.8,
+            alpha=0.9,
+            solid_capstyle="round",
+            label=label,
         )
 
-    # Zaznaczenie punktu startu i końca
+    # 3. Zaznaczenie punktu startu i końca
     ax.scatter(
         df["pos_x"].iloc[0], df["pos_y"].iloc[0], df["pos_z"].iloc[0],
-        color="lime", s=120, marker="^", edgecolor="black", label="Start"
+        color="#00ff00", s=140, marker="o", edgecolor="black", linewidth=1.5, label="Start lotu", zorder=10
     )
     ax.scatter(
         df["pos_x"].iloc[-1], df["pos_y"].iloc[-1], df["pos_z"].iloc[-1],
-        color="red", s=120, marker="v", edgecolor="black", label="Koniec"
+        color="#ff0000", s=140, marker="X", edgecolor="black", linewidth=1.5, label="Koniec lotu", zorder=10
     )
 
-    ax.set_title("Trajektoria 3D Drona w Przestrzeni OptiTrack", fontsize=14, fontweight="bold", pad=15)
+    ax.set_title("Trajektoria 3D Drona w Przestrzeni OptiTrack (Ciągła Trasa)", fontsize=14, fontweight="bold", pad=15)
     ax.set_xlabel("X [m]", fontsize=11, labelpad=8)
     ax.set_ylabel("Y [m]", fontsize=11, labelpad=8)
     ax.set_zlabel("Wysokość Z [m]", fontsize=11, labelpad=8)
+    ax.grid(True, linestyle="--", alpha=0.4)
     ax.legend(loc="upper left", bbox_to_anchor=(1.05, 1.0), fontsize=9)
     plt.tight_layout()
 

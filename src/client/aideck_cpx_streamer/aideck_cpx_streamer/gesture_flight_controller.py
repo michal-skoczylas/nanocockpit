@@ -273,6 +273,7 @@ def main():
     parser.add_argument("--window-size", type=int, default=WINDOW_SIZE, help="Rozmiar okna przesuwnego (N klatek)")
     parser.add_argument("--min-frames", type=int, default=MIN_GESTURE_FRAMES, help="Minimalna liczba klatek z gestem w oknie (M)")
     parser.add_argument("--cooldown", type=float, default=ACTIVATION_COOLDOWN, help="Minimalny odstęp [s] między kolejnymi aktywacjami tego samego gestu")
+    parser.add_argument("--webcam", action="store_true", help="Użyj kamerki laptopa zamiast Wi-Fi AI-Deck (testy w domu)")
     parser.add_argument("--telemetry-host", default="127.0.0.1", help="Host docelowy dla telemetrii (skrypt tracking/logger)")
     parser.add_argument("--telemetry-port", type=int, default=12112, help="Port UDP dla telemetrii (skrypt tracking/logger)")
     parser.add_argument("--no-telemetry", action="store_true", help="Wyłącz nadawanie telemetrii UDP")
@@ -345,7 +346,30 @@ def main():
         telemetry.update_flight(flight_state="GROUND", command="idle")
         takeoff_event.set()
 
-    client = StreamerClient(host=args.host, port=args.port, udp_send=True)
+    cap = None
+    client = None
+    if args.webcam:
+        print("📷 [Kamera] Uruchamianie lokalnej kamerki...")
+        cap = cv2.VideoCapture(0)
+        if not cap.isOpened():
+            print("❌ [Błąd]: Nie można otworzyć lokalnej kamerki.")
+            sys.exit(1)
+    else:
+        client = StreamerClient(host=args.host, port=args.port, udp_send=True)
+
+    def frame_stream():
+        if args.webcam:
+            while not stop_event.is_set():
+                ret, f = cap.read()
+                if not ret:
+                    time.sleep(0.03)
+                    continue
+                yield f, None, None
+        else:
+            for f, tof, m in client.receive():
+                if stop_event.is_set():
+                    break
+                yield f, tof, m
 
     # Inicjalizacja bufora okna przesuwnego
     win_size = max(1, args.window_size)
@@ -362,14 +386,17 @@ def main():
     print(f"   Okno przesuwne: {min_frames} z {win_size} klatek | Cooldown: {args.cooldown}s")
     if not args.no_telemetry:
         print(f"   Telemetria UDP: {args.telemetry_host}:{args.telemetry_port}")
+    if args.webcam:
+        print("   Tryb wideo:     Lokalna kamerka (testy offline)")
     print("   [t] - Start z ziemi | [q] / [ESC] - Bezpieczne lądowanie i wyjście")
     print("=" * 65 + "\n")
 
     try:
-        for frame, tof_frame, meta in client.receive():
+        for frame, tof_frame, meta in frame_stream():
             if stop_event.is_set():
                 break
-            client.send_reply(meta, None)
+            if client and meta:
+                client.send_reply(meta, None)
             last_frame_time = time.time()
 
             vis = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR) if len(frame.shape) == 2 else frame.copy()
@@ -473,7 +500,10 @@ def main():
     finally:
         stop_event.set()
         telemetry.close()
-        client.shutdown()
+        if client:
+            client.shutdown()
+        if cap:
+            cap.release()
         cv2.destroyAllWindows()
         if drone_thread and drone_thread.is_alive():
             print("⏳ Czekam na wylądowanie drona i zamknięcie połączenia...")

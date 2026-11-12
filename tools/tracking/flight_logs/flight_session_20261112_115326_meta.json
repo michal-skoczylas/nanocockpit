@@ -1,0 +1,80 @@
+{
+  "session_id": "20261112_115326",
+  "created_at": "2026-11-12T11:53:43.553245",
+  "duration_seconds": 17.466,
+  "sample_count": 199,
+  "avg_optitrack_hz": 11.4,
+  "rigid_body_name": "QDrone",
+  "up_axis": "z",
+  "ot_port": 12111,
+  "telemetry_port": 12112,
+  "csv_path": "/Users/michalskoczylas/Documents/studia/thesis/nanocockpit/tools/tracking/flight_logs/flight_session_20261112_115326.csv",
+  "command_history": [
+    {
+      "time_rel": 0.047,
+      "command": "none",
+      "flight_state": "DISCONNECTED",
+      "gesture": "none"
+    },
+    {
+      "time_rel": 0.981,
+      "command": "idle",
+      "flight_state": "GROUND",
+      "gesture": "none"
+    },
+    {
+      "time_rel": 2.477,
+      "command": "takeoff",
+      "flight_state": "TAKING_OFF",
+      "gesture": "openhand"
+    },
+    {
+      "time_rel": 4.545,
+      "command": "hover",
+      "flight_state": "FLYING",
+      "gesture": "ok"
+    },
+    {
+      "time_rel": 6.72,
+      "command": "forward",
+      "flight_state": "FLYING",
+      "gesture": "openhand"
+    },
+    {
+      "time_rel": 9.322,
+      "command": "hover",
+      "flight_state": "FLYING",
+      "gesture": "none"
+    },
+    {
+      "time_rel": 10.823,
+      "command": "up",
+      "flight_state": "FLYING",
+      "gesture": "v"
+    },
+    {
+      "time_rel": 12.873,
+      "command": "hover",
+      "flight_state": "FLYING",
+      "gesture": "none"
+    },
+    {
+      "time_rel": 14.397,
+      "command": "land",
+      "flight_state": "LANDING",
+      "gesture": "closehand"
+    },
+    {
+      "time_rel": 16.447,
+      "command": "idle",
+      "flight_state": "LANDED",
+      "gesture": "none"
+    }
+  ],
+  "gesture_occurrences": {
+    "openhand": 51,
+    "ok": 25,
+    "v": 25,
+    "closehand": 22
+  }
+}
