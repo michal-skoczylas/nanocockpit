@@ -80,6 +80,7 @@ GESTURE_ACTIONS = {
 # Kolejki i zdarzenia synchronizujące
 cmd_queue = queue.Queue(maxsize=1)
 stop_event = threading.Event()
+connected_event = threading.Event()
 takeoff_event = threading.Event()
 flying_event = threading.Event()
 drone_busy_event = threading.Event()
@@ -182,6 +183,7 @@ def drone_worker(
 
     try:
         with SyncCrazyflie(uri, cf=Crazyflie(rw_cache="./cache")) as scf:
+            connected_event.set()
             print("🟢 [Crazyflie] Połączono! Dron stoi bezpiecznie na ziemi.")
             print("👉 Pokaż OPENHAND lub naciśnij klawisz 't' w oknie, aby wystartować.")
 
@@ -265,6 +267,7 @@ def drone_worker(
     finally:
         drone_busy_event.clear()
         flying_event.clear()
+        connected_event.clear()
         if telemetry:
             telemetry.update_flight(flight_state="LANDED", command="idle")
         stop_event.set()
@@ -458,6 +461,7 @@ def main():
         drone_thread.start()
     else:
         print("🟡 [TRYB DRY-RUN] Symulacja bez łączenia z dronem (pełna maszyna stanów).")
+        connected_event.set()
         telemetry.update_flight(flight_state="GROUND", command="idle")
 
     def frame_stream():
@@ -555,8 +559,8 @@ def main():
             is_flying = flying_event.is_set()
             if is_flying and not was_flying:
                 gesture_window.clear()
-                post_takeoff_lock_until = now + max(cooldown_sec, POST_TAKEOFF_LOCK)
-                last_activation_time = now
+                post_takeoff_lock_until = now + POST_TAKEOFF_LOCK
+                last_activation_time = 0.0
                 current_action = "ZAWIS (HOVER) - Gotowy na gesty"
             was_flying = is_flying
 
@@ -634,7 +638,10 @@ def main():
                         print(f"⏸️ [PAUZA - TEST OKNA]: {top_gesture.upper()} ({count}/{win_size}, conf={conf*100:.0f}%)")
                         gesture_window.clear()
                     elif not takeoff_event.is_set():
-                        if top_gesture == "openhand":
+                        if not connected_event.is_set():
+                            current_action = "Łączenie z Crazyflie..."
+                            gesture_window.clear()
+                        elif top_gesture == "openhand":
                             activated_gesture = "openhand(TAKEOFF)"
                             last_activation_time = now
                             stats["activations"]["takeoff"] += 1
@@ -735,17 +742,21 @@ def main():
                 stop_event.set()
                 break
             elif key == ord("t") and not takeoff_event.is_set():
-                print("🛫 [Klawiatura] Start drona klawiszem 't'")
-                takeoff_event.set()
-                current_action = "Wznoszenie na 50 cm..."
-                gesture_window.clear()
-                try:
-                    cmd_queue.get_nowait()
-                except queue.Empty:
-                    pass
-                if args.dry_run:
-                    telemetry.update_flight(flight_state="TAKING_OFF", command="takeoff")
-                    dry_run_takeoff_ready_at = time.time() + 0.6
+                if not connected_event.is_set():
+                    print("⏳ [Klawiatura] Dron jeszcze się łączy - poczekaj na komunikat 'Połączono!'.")
+                    current_action = "Łączenie z Crazyflie..."
+                else:
+                    print("🛫 [Klawiatura] Start drona klawiszem 't'")
+                    takeoff_event.set()
+                    current_action = "Wznoszenie na 50 cm..."
+                    gesture_window.clear()
+                    try:
+                        cmd_queue.get_nowait()
+                    except queue.Empty:
+                        pass
+                    if args.dry_run:
+                        telemetry.update_flight(flight_state="TAKING_OFF", command="takeoff")
+                        dry_run_takeoff_ready_at = time.time() + 0.6
             elif key == ord("l") and flying_event.is_set():
                 print("🛑 [Klawiatura] Lądowanie awaryjne klawiszem 'l'")
                 if args.dry_run:
