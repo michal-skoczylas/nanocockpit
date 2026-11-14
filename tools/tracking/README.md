@@ -5,6 +5,19 @@ Kompleksowy moduł do synchronizacji i rejestracji danych trajektorii 3D z syste
 
 ---
 
+## ✋ Gesty dłoni i przypisane akcje
+
+* `openhand` $\rightarrow$ **Start z ziemi** (gdy stoi) / **Ruch w przód** (w locie)
+* `shaka` $\rightarrow$ **Ruch w tył**
+* `left` $\rightarrow$ **Ruch w lewo**
+* `right` $\rightarrow$ **Ruch w prawo**
+* `v` $\rightarrow$ **Wznoszenie w górę**
+* `dislike` $\rightarrow$ **Opadanie w dół**
+* `closehand` $\rightarrow$ **Zatrzymanie w miejscu / Zawis (HOVER / STOP)**
+* `ok` $\rightarrow$ **Bezpieczne lądowanie drona (LAND)**
+
+---
+
 ## 📁 Zawartość katalogu
 
 * [`optitrack_flight_logger.py`](optitrack_flight_logger.py) – Główny rejestrator danych (OptiTrack UDP + Telemetria UDP $\rightarrow$ CSV/JSON).
@@ -34,7 +47,10 @@ W drugim terminalu:
 cd src/client/aideck_cpx_streamer/aideck_cpx_streamer
 python3 gesture_flight_controller.py
 ```
-Kontroler automatycznie nawiąże bezkontaktowe nadawanie telemetrii UDP. Jeśli rejestrator nie jest włączony, dron leci normalnie.
+1. Wciśnij `'t'` na klawiaturze (lub pokaż `openhand`).
+2. Dron zasygnalizuje procedurę wznoszenia: `AKCJA: Wznoszenie na 50 cm...`. Podczas wznoszenia gesty są celowo ignorowane, aby uniknąć fałszywych komend.
+3. Gdy dron osiągnie pułap 50 cm, na ekranie pojawi się: `AKCJA: ZAWIS (HOVER) - Gotowy na gesty`.
+4. Możesz teraz sterować dronem gestami (ruch w przód: `openhand`, zawis: `closehand`, lądowanie: `ok`).
 
 ### Krok 3: Zakończenie sesji
 Wciśnij `Ctrl+C` w oknie rejestratora. W katalogu `flight_logs/` powstaną dwa pliki:
@@ -50,7 +66,7 @@ Wciśnij `Ctrl+C` w oknie rejestratora. W katalogu `flight_logs/` powstaną dwa 
 cd tools/tracking
 python3 run_offline_test.py
 ```
-Skrypt przeprowadza symulację 17-sekundowej misji z kompletem gestów (`takeoff`, `hover`, `forward`, `up`, `land`), zapisuje dane i generuje komplet wykresów PNG.
+Skrypt przeprowadza symulację misji z kompletem gestów (`takeoff`, `hover`, `forward`, `up`, `land`), zapisuje dane i generuje komplet wykresów PNG.
 
 ### Opcja B: Test interaktywny z kamerką laptopa (`--webcam`)
 1. **Terminal 1 – Rejestrator:**
@@ -68,7 +84,6 @@ Skrypt przeprowadza symulację 17-sekundowej misji z kompletem gestów (`takeoff
    cd src/client/aideck_cpx_streamer/aideck_cpx_streamer
    python3 gesture_flight_controller.py --dry-run --webcam
    ```
-Pokazuj gesty do wbudowanej kamery i obserwuj w Terminalu 1, jak stan drona i gesty synchronizują się z trajektorią OptiTracka.
 
 ---
 
@@ -78,29 +93,3 @@ Dla dowolnej sesji lotu uruchom:
 ```bash
 python3 plot_flight_data.py --csv flight_logs/flight_session_XXXXXXXX_XXXXXX.csv --save --show
 ```
-
-### Otrzymasz:
-1. `*_traj3d.png` – Ciągła linia trajektorii 3D ze zmieniającymi się kolorami komend, rzutem na podłogę ($Z=0$) oraz punktami startu i lądowania.
-2. `*_timeseries.png` – Przebiegi współrzędnych $X(t)$, $Y(t)$, $Z(t)$ z zaznaczonymi pasmami czasowymi komend w tle.
-3. `*_gestures.png` – Dynamika klasyfikacji gestów w czasie z nałożoną granicą pewności progu aktywacji ($65\%$).
-
----
-
-## 📋 4. Struktura Kolumn w Pliku CSV
-
-| Kolumna | Typ | Opis |
-|---|---|---|
-| `timestamp` | `float` | Czas uniksowy rejestracji próbki $[s]$ |
-| `time_rel` | `float` | Czas od startu nagrywania sesji $[s]$ |
-| `ot_visible` | `int` | $1$ = marker widoczny w OptiTrack, $0$ = przesłonięty |
-| `pos_x`, `pos_y`, `pos_z` | `float` | Zorientowane współrzędne pozycji drona (oś $Z$ zawsze pion w górę) $[m]$ |
-| `raw_x`, `raw_y`, `raw_z` | `float` | Surowe współrzędne bezpośrednio z pakietu serwera OptiTrack $[m]$ |
-| `roll`, `pitch`, `yaw` | `float` | Orientacja kątowa drona $[rad / deg]$ |
-| `flight_state` | `string` | Stan operacyjny (`GROUND`, `TAKING_OFF`, `FLYING`, `LANDING`, `LANDED`) |
-| `command` | `string` | Wykonywana akcja (`idle`, `takeoff`, `forward`, `back`, `left`, `right`, `up`, `down`, `stop`, `hover`, `land`) |
-| `gesture` | `string` | Rozpoznany gest dłoni (`openhand`, `closehand`, `v`, `shaka`, `left`, `right`, `dislike`, `ok`, `none`) |
-| `gesture_conf` | `float` | Pewność modelu ResNet ($0.00 - 1.00$) |
-| `window_status` | `string` | Status bufora okna przesuwnego (np. `OPENHAND: 8/10`) |
-| `cmd_age_s` | `float` | Czas w sekundach od momentu wydania aktualnej komendy |
-| `gesture_age_s` | `float` | Czas w sekundach od ostatniej klatki detekcji gestu |
-| `telemetry_connected` | `int` | Flaga połączenia z kontrolerem drona ($1$ = aktywny, $0$ = brak pakietów $>2.5s$) |
